@@ -2,6 +2,7 @@ class virtual connection (host, port) =
   object(self)
   val fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0
   val bytes_per_tick = 10240
+  val mutable connected = false
   val mutable connect_pending = false
   val mutable outbound_buffer = ""
 
@@ -25,13 +26,18 @@ class virtual connection (host, port) =
 
   method handle_writeable () =
     if connect_pending then (
-      connect_pending <- false;
-      self#on_connected();
+      match Unix.getsockopt_error fd with
+      | None ->
+        connect_pending <- false;
+        connected <- true;
+        self#on_connected();
+      | Some error ->
+        self#close(error);
       );
 
     let out_len = String.length outbound_buffer in
 
-    if out_len > 0 then (
+    if connected && out_len > 0 then (
       let bytes_written =
         try
           Unix.send fd outbound_buffer 0 out_len []
@@ -69,9 +75,11 @@ class virtual connection (host, port) =
   method send_data data =
     outbound_buffer <- String.concat "" [outbound_buffer ; data];
 
-  method close () =
+  method close (error) =
     Unix.shutdown fd Unix.SHUTDOWN_ALL;
     Unix.close fd;
+    connected <- false;
+    self#on_disconnected();
 
   method virtual on_connected : unit -> unit
   method virtual on_disconnected : unit -> unit
