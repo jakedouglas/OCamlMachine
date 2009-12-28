@@ -33,7 +33,7 @@ class reactor () =
         []
       in
 
-      let readable, writeable, _ = Em_misc.restart (Unix.select read_fds write_fds []) 0.01 in
+      let readable, writeable, _ = Om_misc.restart (Unix.select read_fds write_fds []) 0.01 in
 
       Hashtbl.iter
         (fun fd conn ->
@@ -49,10 +49,10 @@ class reactor () =
 
       ();
 
-    method add (conn : Em_connection.connection) =
+    method add (conn : Om_connection.connection) =
       Hashtbl.add conns conn#get_fd conn;
 
-    method remove (conn : Em_connection.connection) =
+    method remove (conn : Om_connection.connection) =
       conns_to_delete <- conn#get_fd :: conns_to_delete;
 
     method stop () =

@@ -1,6 +1,6 @@
 all: clean example
 
-example: em_misc.ml em_connection.ml em_poller.ml em_reactor.ml em_dumb_http_client.ml example.ml
+example: om_misc.ml om_connection.ml om_reactor.ml om_dumb_http_client.ml example.ml
 	ocamlopt unix.cmxa -o $@ $+
 
 clean:
