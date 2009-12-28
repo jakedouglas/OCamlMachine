@@ -18,6 +18,7 @@ class reactor () =
         self#tick();
       done;
       running <- false;
+      Hashtbl.iter (fun fd conn -> conn#close(None)) conns;
       on_stop(self :> reactor);
       ();
 

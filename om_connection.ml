@@ -1,10 +1,11 @@
-class virtual connection (host, port) =
+class virtual connection (reactor, host, port) =
   object(self)
   val fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0
   val bytes_per_tick = 10240
   val mutable connected = false
   val mutable connect_pending = false
   val mutable outbound_buffer = ""
+  val mutable reactor = reactor
 
   method get_fd = fd
 
@@ -32,6 +33,8 @@ class virtual connection (host, port) =
     with
       | Unix.Unix_error(Unix.EINPROGRESS,_,_) ->
         (connect_pending <- true);
+
+    reactor#add(self :> connection);
 
   method handle_writeable () =
     if connect_pending then (

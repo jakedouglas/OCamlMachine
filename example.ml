@@ -1,6 +1,6 @@
-class dumbhttpclient (host, port) =
+class dumbhttpclient (reactor, host, port) =
   object(self)
-  inherit Om_connection.connection (host, port)
+  inherit Om_connection.connection (reactor, host, port)
 
   method on_connected () =
     print_string "Connected!\n";
@@ -22,8 +22,8 @@ let r = new Om_reactor.reactor() in
 let on_start (reactor : Om_reactor.reactor) =
   print_string "Reactor started!\n";
   flush stdout;
-  let c = new dumbhttpclient ("google.com", 80) in
-  reactor#add(c);
+  let c = new dumbhttpclient (reactor, "google.com", 80) in
+  ();
 in
 
 let on_stop (reactor : Om_reactor.reactor) =
