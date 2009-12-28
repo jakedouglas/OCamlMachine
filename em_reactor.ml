@@ -3,6 +3,7 @@ class reactor () =
     val mutable running = false
     val mutable should_stop = false
     val mutable conns = Hashtbl.create 100
+    val mutable conns_to_delete = []
     val mutable sighandler = (fun _ -> ())
 
     initializer
@@ -22,12 +23,12 @@ class reactor () =
 
     method tick () =
       let read_fds = Hashtbl.fold
-        (fun fd conn l -> if conn#select_for_read() then fd :: l else l) 
+        (fun fd conn l -> if conn#select_for_read() then fd :: l else l)
         conns
         []
       in
       let write_fds = Hashtbl.fold
-        (fun fd conn l -> if conn#select_for_write() then fd :: l else l) 
+        (fun fd conn l -> if conn#select_for_write() then fd :: l else l)
         conns
         []
       in
@@ -43,9 +44,17 @@ class reactor () =
           )
         conns;
 
+      (* remove any connections that closed themselves during the tick *)
+      List.iter (fun fd -> Hashtbl.remove conns fd) conns_to_delete;
+
       ();
 
     method add (conn : Em_connection.connection) =
       Hashtbl.add conns conn#get_fd conn;
 
+    method remove (conn : Em_connection.connection) =
+      conns_to_delete <- conn#get_fd :: conns_to_delete;
+
+    method stop () =
+      should_stop <- true;
   end;;

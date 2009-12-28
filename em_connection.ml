@@ -25,6 +25,7 @@ class virtual connection (host, port) =
     in
     let sockaddr = Unix.ADDR_INET(addr, port) in
     Unix.set_nonblock fd;
+    Unix.setsockopt fd Unix.SO_REUSEADDR true;
     try
       Unix.connect fd sockaddr;
       connect_pending <- false;
@@ -87,7 +88,11 @@ class virtual connection (host, port) =
     outbound_buffer <- String.concat "" [outbound_buffer ; data];
 
   method close (error) =
-    Unix.shutdown fd Unix.SHUTDOWN_ALL;
+    try
+      Unix.shutdown fd Unix.SHUTDOWN_ALL;
+    with
+    | exc -> ();
+
     Unix.close fd;
     connected <- false;
     self#on_disconnected(error);
