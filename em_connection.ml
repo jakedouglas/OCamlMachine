@@ -32,7 +32,7 @@ class virtual connection (host, port) =
         connected <- true;
         self#on_connected();
       | Some error ->
-        self#close(error);
+        self#close(Some error);
       );
 
     let out_len = String.length outbound_buffer in
@@ -62,13 +62,16 @@ class virtual connection (host, port) =
         | Unix.Unix_error(Unix.EAGAIN,_,_)
         | Unix.Unix_error(Unix.EWOULDBLOCK,_,_)
         | Unix.Unix_error(Unix.EINTR,_,_) ->
-          (0);
+          (-1);
     in
 
     if len > 0 then (
       self#on_receive_data((String.sub buf 0 len));
       self#handle_readable();
       );
+
+    (* if we read 0 bytes then the peer closed gracefully *)
+    if len == 0 then self#close(None);
 
     ();
 
