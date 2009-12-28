@@ -7,7 +7,7 @@ class dumbhttpclient (host, port) =
     flush stdout;
     self#send_data("GET / HTTP/1.1\r\n\r\n");
 
-  method on_disconnected () =
+  method on_disconnected (error) =
     print_string "Disconnected.\n";
     flush stdout;
 

@@ -82,9 +82,9 @@ class virtual connection (host, port) =
     Unix.shutdown fd Unix.SHUTDOWN_ALL;
     Unix.close fd;
     connected <- false;
-    self#on_disconnected();
+    self#on_disconnected(error);
 
   method virtual on_connected : unit -> unit
-  method virtual on_disconnected : unit -> unit
+  method virtual on_disconnected : Unix.error option -> unit
   method virtual on_receive_data : string -> unit
 end;;
