@@ -15,7 +15,15 @@ class virtual connection (host, port) =
     connect_pending || String.length outbound_buffer > 0
 
   initializer
-    let sockaddr = Unix.ADDR_INET((Unix.gethostbyname host).Unix.h_addr_list.(0), port) in
+    (* try to parse as an IP address before we use gethostbyname *)
+    let addr =
+      try
+        Unix.inet_addr_of_string(host)
+      with
+      | Failure _ ->
+        (Unix.gethostbyname host).Unix.h_addr_list.(0);
+    in
+    let sockaddr = Unix.ADDR_INET(addr, port) in
     Unix.set_nonblock fd;
     try
       Unix.connect fd sockaddr;
