@@ -1,7 +1,7 @@
 class virtual connection (reactor, host, port) =
   object(self)
   val fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0
-  val bytes_per_tick = 10240
+  val bytes_per_read = 16384
   val mutable connected = false
   val mutable connect_pending = false
   val mutable outbound_buffer = ""
@@ -66,10 +66,10 @@ class virtual connection (reactor, host, port) =
     ();
 
   method handle_readable () =
-    let buf = String.create bytes_per_tick in
+    let buf = String.create bytes_per_read in
     let len =
       try
-        Unix.recv fd buf 0 bytes_per_tick [];
+        Unix.recv fd buf 0 bytes_per_read [];
       with
         | Unix.Unix_error(Unix.EAGAIN,_,_)
         | Unix.Unix_error(Unix.EWOULDBLOCK,_,_)
@@ -98,6 +98,7 @@ class virtual connection (reactor, host, port) =
 
     Unix.close fd;
     connected <- false;
+    reactor#remove(self :> connection);
     self#on_disconnected(error);
 
   method virtual on_connected : unit -> unit

@@ -41,6 +41,7 @@ class reactor () =
 
       (* remove any connections that closed themselves during the tick *)
       List.iter (fun fd -> Hashtbl.remove conns fd) conns_to_delete;
+      conns_to_delete <- [];
 
       ();
 
