@@ -22,7 +22,7 @@ let r = new Om_reactor.reactor() in
 let on_start (reactor : Om_reactor.reactor) =
   print_string "Reactor started!\n";
   flush stdout;
-  let c = new dumbhttpclient (reactor, "google.com", 80) in
+  let _ = new dumbhttpclient (reactor, "google.com", 80) in
   ();
 in
 

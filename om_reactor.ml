@@ -36,14 +36,8 @@ class reactor () =
 
       let readable, writeable, _ = Om_misc.restart (Unix.select read_fds write_fds []) 0.01 in
 
-      Hashtbl.iter
-        (fun fd conn ->
-          if List.mem fd readable then
-            conn#handle_readable();
-          if List.mem fd writeable then
-            conn#handle_writeable();
-          )
-        conns;
+      List.iter (fun fd -> let conn = Hashtbl.find conns fd in conn#handle_readable()) readable;
+      List.iter (fun fd -> let conn = Hashtbl.find conns fd in conn#handle_writeable()) writeable;
 
       (* remove any connections that closed themselves during the tick *)
       List.iter (fun fd -> Hashtbl.remove conns fd) conns_to_delete;
