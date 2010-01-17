@@ -1,13 +1,10 @@
 class virtual connection (reactor, host, port) =
   object(self)
-  val fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0
+  inherit Om_eventable.eventable (reactor)
   val bytes_per_read = 16384
   val mutable connected = false
   val mutable connect_pending = false
   val mutable outbound_buffer = ""
-  val mutable reactor = reactor
-
-  method get_fd = fd
 
   method select_for_read () =
     not connect_pending
@@ -16,6 +13,7 @@ class virtual connection (reactor, host, port) =
     connect_pending || String.length outbound_buffer > 0
 
   initializer
+    fd <- Some (Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0);
     (* try to parse as an IP address before we use gethostbyname *)
     let addr =
       try
@@ -25,26 +23,27 @@ class virtual connection (reactor, host, port) =
         (Unix.gethostbyname host).Unix.h_addr_list.(0);
     in
     let sockaddr = Unix.ADDR_INET(addr, port) in
-    Unix.set_nonblock fd;
-    Unix.setsockopt fd Unix.SO_REUSEADDR true;
+    Unix.set_nonblock (self#get_fd());
+    Unix.setsockopt (self#get_fd()) Unix.SO_REUSEADDR true;
     try
-      Unix.connect fd sockaddr;
+      Unix.connect (self#get_fd()) sockaddr;
       connect_pending <- false;
     with
       | Unix.Unix_error(Unix.EINPROGRESS,_,_) ->
         (connect_pending <- true);
 
-    reactor#add(self :> connection);
+    reactor#add(self :> Om_eventable.eventable);
 
   method handle_writeable () =
     if connect_pending then (
-      match Unix.getsockopt_error fd with
+      match Unix.getsockopt_error (self#get_fd()) with
       | None ->
         connect_pending <- false;
         connected <- true;
         self#on_connected();
       | Some error ->
-        self#close(Some error);
+        self#close();
+        self#on_disconnected(Some error);
       );
 
     let out_len = String.length outbound_buffer in
@@ -52,7 +51,7 @@ class virtual connection (reactor, host, port) =
     if connected && out_len > 0 then (
       let bytes_written =
         try
-          Unix.send fd outbound_buffer 0 out_len []
+          Unix.send (self#get_fd()) outbound_buffer 0 out_len []
         with
           | Unix.Unix_error(Unix.EAGAIN,_,_)
           | Unix.Unix_error(Unix.EWOULDBLOCK,_,_)
@@ -69,7 +68,7 @@ class virtual connection (reactor, host, port) =
     let buf = String.create bytes_per_read in
     let len =
       try
-        Unix.recv fd buf 0 bytes_per_read [];
+        Unix.recv (self#get_fd()) buf 0 bytes_per_read [];
       with
         | Unix.Unix_error(Unix.EAGAIN,_,_)
         | Unix.Unix_error(Unix.EWOULDBLOCK,_,_)
@@ -83,23 +82,25 @@ class virtual connection (reactor, host, port) =
       );
 
     (* if we read 0 bytes then the peer closed gracefully *)
-    if len == 0 then self#close(None);
+    if len == 0 then (
+      self#close();
+      self#on_disconnected(None);
+      );
 
     ();
 
   method send_data data =
     outbound_buffer <- String.concat "" [outbound_buffer ; data];
 
-  method close (error) =
+  method close () =
     try
-      Unix.shutdown fd Unix.SHUTDOWN_ALL;
+      Unix.shutdown (self#get_fd()) Unix.SHUTDOWN_ALL;
     with
     | exc -> ();
 
-    Unix.close fd;
+    Unix.close (self#get_fd());
     connected <- false;
-    reactor#remove(self :> connection);
-    self#on_disconnected(error);
+    reactor#remove(self :> Om_eventable.eventable);
 
   method virtual on_connected : unit -> unit
   method virtual on_disconnected : Unix.error option -> unit

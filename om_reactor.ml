@@ -21,13 +21,14 @@ class reactor () =
         self#tick();
       done;
       running <- false;
-      Hashtbl.iter (fun fd conn -> conn#close(None)) conns;
+      Hashtbl.iter (fun fd conn -> conn#close()) conns;
       on_stop(self :> reactor);
       ();
 
     method tick () =
       let current_time = Unix.gettimeofday() in
-      let timers_to_run = Timers.fold 
+      (* This is naive and needs to be fixed so we don't iterate over the entire bunch every tick *)
+      let timers_to_run = Timers.fold
         (fun time fn l -> if time <= current_time then l @ [time] else l)
         timers
         []
@@ -63,11 +64,11 @@ class reactor () =
 
       ();
 
-    method add (conn : Om_connection.connection) =
-      Hashtbl.add conns conn#get_fd conn;
+    method add (conn : Om_eventable.eventable) =
+      Hashtbl.add conns (conn#get_fd()) conn;
 
-    method remove (conn : Om_connection.connection) =
-      conns_to_delete <- conn#get_fd :: conns_to_delete;
+    method remove (conn : Om_eventable.eventable) =
+      conns_to_delete <- (conn#get_fd()) :: conns_to_delete;
 
     method stop () =
       should_stop <- true;
