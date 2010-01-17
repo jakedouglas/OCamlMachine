@@ -1,3 +1,5 @@
+module Timers = Map.Make(struct type t = float let compare = compare end);;
+
 class reactor () =
   object(self)
     val mutable running = false
@@ -5,6 +7,7 @@ class reactor () =
     val mutable conns = Hashtbl.create 100
     val mutable conns_to_delete = []
     val mutable sighandler = (fun _ -> ())
+    val mutable timers = Timers.empty
 
     initializer
       sighandler <- (fun _ -> should_stop <- true);
@@ -23,6 +26,21 @@ class reactor () =
       ();
 
     method tick () =
+      let current_time = Unix.gettimeofday() in
+      let timers_to_run = Timers.fold 
+        (fun time fn l -> if time <= current_time then l @ [time] else l)
+        timers
+        []
+      in
+
+      List.iter
+        (fun time ->
+          let fn = Timers.find time timers in
+          timers <- Timers.remove time timers;
+          fn();
+        )
+        timers_to_run;
+
       let read_fds = Hashtbl.fold
         (fun fd conn l -> if conn#select_for_read() then fd :: l else l)
         conns
@@ -53,4 +71,8 @@ class reactor () =
 
     method stop () =
       should_stop <- true;
+
+    method add_timer (delay, fn) =
+      timers <- Timers.add (Unix.gettimeofday() +. delay) fn timers;
+
   end;;

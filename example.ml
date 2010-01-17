@@ -23,6 +23,13 @@ let on_start (reactor : Om_reactor.reactor) =
   print_string "Reactor started!\n";
   flush stdout;
   let _ = new dumbhttpclient (reactor, "google.com", 80) in
+  reactor#add_timer(2.5, 
+    (fun _ -> 
+      print_string "Hopefully downloaded some data.\n";
+      flush stdout;
+      )
+    );
+  reactor#add_timer(3.0, (fun _ -> reactor#stop()));
   ();
 in
 
