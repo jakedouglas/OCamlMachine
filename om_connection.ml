@@ -1,38 +1,51 @@
-class virtual connection (reactor, host, port) =
+class virtual connection (reactor, host, port, existing_fd) =
   object(self)
   inherit Om_eventable.eventable (reactor)
   val bytes_per_read = 16384
   val mutable connected = false
   val mutable connect_pending = false
   val mutable outbound_buffer = ""
+  val mutable shutdown_after_writing = false
+
+  initializer
+    (match existing_fd with
+    | Some descr -> (
+      fd <- Some descr;
+      Unix.set_nonblock (self#get_fd());
+      Unix.setsockopt (self#get_fd()) Unix.SO_REUSEADDR true;
+      connected <- true;
+      self#on_connected();
+      );
+
+    | None -> (
+      fd <- Some (Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0);
+      Unix.set_nonblock (self#get_fd());
+      Unix.setsockopt (self#get_fd()) Unix.SO_REUSEADDR true;
+      (* try to parse as an IP address before we use gethostbyname *)
+      let addr =
+        try
+          Unix.inet_addr_of_string(host)
+        with
+        | Failure _ ->
+          (Unix.gethostbyname host).Unix.h_addr_list.(0);
+      in
+      let sockaddr = Unix.ADDR_INET(addr, port) in
+      try
+        Unix.connect (self#get_fd()) sockaddr;
+        connect_pending <- false;
+      with
+        | Unix.Unix_error(Unix.EINPROGRESS,_,_) ->
+          (connect_pending <- true);
+      );
+    );
+
+    reactor#add(self :> Om_eventable.eventable);
 
   method select_for_read () =
     not connect_pending
 
   method select_for_write () =
     connect_pending || String.length outbound_buffer > 0
-
-  initializer
-    fd <- Some (Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0);
-    (* try to parse as an IP address before we use gethostbyname *)
-    let addr =
-      try
-        Unix.inet_addr_of_string(host)
-      with
-      | Failure _ ->
-        (Unix.gethostbyname host).Unix.h_addr_list.(0);
-    in
-    let sockaddr = Unix.ADDR_INET(addr, port) in
-    Unix.set_nonblock (self#get_fd());
-    Unix.setsockopt (self#get_fd()) Unix.SO_REUSEADDR true;
-    try
-      Unix.connect (self#get_fd()) sockaddr;
-      connect_pending <- false;
-    with
-      | Unix.Unix_error(Unix.EINPROGRESS,_,_) ->
-        (connect_pending <- true);
-
-    reactor#add(self :> Om_eventable.eventable);
 
   method handle_writeable () =
     if connect_pending then (
@@ -62,6 +75,8 @@ class virtual connection (reactor, host, port) =
       if bytes_written > 0 then
         outbound_buffer <- String.sub outbound_buffer bytes_written (out_len - bytes_written);
       );
+
+    if shutdown_after_writing && (String.length outbound_buffer) == 0 then (self#close());
     ();
 
   method handle_readable () =
@@ -101,6 +116,9 @@ class virtual connection (reactor, host, port) =
     Unix.close (self#get_fd());
     connected <- false;
     reactor#remove(self :> Om_eventable.eventable);
+
+  method close_after_writing () =
+    shutdown_after_writing <- true;
 
   method virtual on_connected : unit -> unit
   method virtual on_disconnected : Unix.error option -> unit
