@@ -67,9 +67,8 @@ class virtual connection (reactor, host, port, existing_fd) =
           Unix.send (self#get_fd()) outbound_buffer 0 out_len []
         with
           | Unix.Unix_error(Unix.EBADF as err,_,_)
-          | Unix.Unix_error(Unix.ECONNRESET as err,_,_)
-          | Unix.Unix_error(Unix.EACCESS as err,_,_)
-          | Unix.Unix_error(Unix.ECONNRESET as err,_,_) ->          
+          | Unix.Unix_error(Unix.EACCES as err,_,_)
+          | Unix.Unix_error(Unix.ECONNRESET as err,_,_) ->
             self#close();
             self#on_disconnected(Some err);
             0
