@@ -66,10 +66,19 @@ class virtual connection (reactor, host, port, existing_fd) =
         try
           Unix.send (self#get_fd()) outbound_buffer 0 out_len []
         with
+          | Unix.Unix_error(Unix.EBADF as err,_,_)
+          | Unix.Unix_error(Unix.ECONNRESET as err,_,_)
+          | Unix.Unix_error(Unix.EACCESS as err,_,_)
+          | Unix.Unix_error(Unix.ECONNRESET as err,_,_) ->          
+            self#close();
+            self#on_disconnected(Some err);
+            0
           | Unix.Unix_error(Unix.EAGAIN,_,_)
-          | Unix.Unix_error(Unix.EWOULDBLOCK,_,_)
           | Unix.Unix_error(Unix.EINTR,_,_) ->
-            (0);
+            0
+          | Unix.Unix_error(err,_,_) -> ((Om_misc.handle_uncaught_unix_error err); 0)
+          | exc -> (Om_misc.handle_uncaught_exception exc);
+            
       in
 
       if bytes_written > 0 then
@@ -85,10 +94,22 @@ class virtual connection (reactor, host, port, existing_fd) =
       try
         Unix.recv (self#get_fd()) buf 0 bytes_per_read [];
       with
-        | Unix.Unix_error(Unix.EAGAIN,_,_)
-        | Unix.Unix_error(Unix.EWOULDBLOCK,_,_)
-        | Unix.Unix_error(Unix.EINTR,_,_) ->
-          (-1);
+        (* No data is available, pass *)
+        | Unix.Unix_error(Unix.EAGAIN,_,_) -> -1
+        (* This should be a pretty rare case, so just pass and retry on the next tick *)
+        | Unix.Unix_error(Unix.EINTR,_,_) -> -1
+        (* Something else has closed the file descriptor or the OS is buggy *)
+        | Unix.Unix_error(Unix.EBADF as err,_,_)
+        (* Timed out. Not sure if this can actually happen here with a non-blocking socket *)
+        | Unix.Unix_error(Unix.ETIMEDOUT as err,_,_)
+        (* Connection reset. Not sure about this either *)
+        | Unix.Unix_error(Unix.ECONNRESET as err,_,_) ->
+          self#close();
+          self#on_disconnected(Some err);
+          -1
+        (* Something really bad happened or the user is breaking the file descriptors and we should just die *)
+        | Unix.Unix_error(err,_,_) -> ((Om_misc.handle_uncaught_unix_error err); -1)
+        | exc -> (Om_misc.handle_uncaught_exception exc);
     in
 
     if len > 0 then (
